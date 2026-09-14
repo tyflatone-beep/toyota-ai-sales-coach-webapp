@@ -1,0 +1,274 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+<title>TOYOTA AI Sales Coach</title>
+<style>
+  :root {
+    --toyota-red: #EB0A1E;
+    --bg: #f4f5f7;
+    --bubble-user: #EB0A1E;
+    --bubble-model: #ffffff;
+    --text-dark: #1a1a1a;
+    --text-light: #ffffff;
+    --border: #e2e2e2;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0;
+    padding: 0;
+    height: 100%;
+    background: var(--bg);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    color: var(--text-dark);
+  }
+  #app {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    max-width: 640px;
+    margin: 0 auto;
+    background: var(--bg);
+  }
+  header {
+    background: #111;
+    color: #fff;
+    padding: 14px 16px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-shrink: 0;
+  }
+  header .dot {
+    width: 10px; height: 10px; border-radius: 50%;
+    background: var(--toyota-red);
+    flex-shrink: 0;
+  }
+  header h1 {
+    font-size: 16px;
+    margin: 0;
+    font-weight: 600;
+  }
+  header p {
+    margin: 0;
+    font-size: 12px;
+    color: #bbb;
+  }
+  #messages {
+    flex: 1;
+    overflow-y: auto;
+    padding: 16px 12px 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .bubble {
+    max-width: 85%;
+    padding: 10px 14px;
+    border-radius: 16px;
+    line-height: 1.4;
+    font-size: 15px;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+  }
+  .bubble.user {
+    align-self: flex-end;
+    background: var(--bubble-user);
+    color: var(--text-light);
+    border-bottom-right-radius: 4px;
+  }
+  .bubble.model {
+    align-self: flex-start;
+    background: var(--bubble-model);
+    color: var(--text-dark);
+    border: 1px solid var(--border);
+    border-bottom-left-radius: 4px;
+  }
+  .bubble.system {
+    align-self: center;
+    background: transparent;
+    color: #888;
+    font-size: 12px;
+    max-width: 100%;
+    text-align: center;
+  }
+  #typing {
+    align-self: flex-start;
+    padding: 10px 14px;
+    color: #888;
+    font-size: 13px;
+    display: none;
+  }
+  #start-row {
+    padding: 0 12px 10px;
+    display: flex;
+    justify-content: center;
+  }
+  #start-btn {
+    background: var(--toyota-red);
+    color: #fff;
+    border: none;
+    padding: 12px 20px;
+    border-radius: 24px;
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  #start-btn:active { opacity: 0.85; }
+  #composer {
+    display: flex;
+    gap: 8px;
+    padding: 10px 12px;
+    padding-bottom: max(10px, env(safe-area-inset-bottom));
+    background: #fff;
+    border-top: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+  #composer textarea {
+    flex: 1;
+    resize: none;
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    padding: 10px 14px;
+    font-size: 15px;
+    font-family: inherit;
+    max-height: 100px;
+  }
+  #composer button {
+    background: var(--toyota-red);
+    color: #fff;
+    border: none;
+    border-radius: 50%;
+    width: 44px;
+    height: 44px;
+    flex-shrink: 0;
+    font-size: 18px;
+    cursor: pointer;
+  }
+  #composer button:disabled {
+    background: #ccc;
+  }
+  .error-banner {
+    background: #fdecea;
+    color: #b3261e;
+    border: 1px solid #f5c2c0;
+    padding: 8px 12px;
+    border-radius: 8px;
+    font-size: 13px;
+    margin: 0 12px 8px;
+  }
+</style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <div class="dot"></div>
+    <div>
+      <h1>TOYOTA AI Sales Coach</h1>
+      <p>TFR Cursus PRO — entraînement commercial</p>
+    </div>
+  </header>
+
+  <div id="messages"></div>
+  <div id="typing">Le client réfléchit…</div>
+  <div id="start-row">
+    <button id="start-btn">Démarrer la formation</button>
+  </div>
+  <div id="composer" style="display:none;">
+    <textarea id="input" rows="1" placeholder="Écrivez votre message…"></textarea>
+    <button id="send-btn" aria-label="Envoyer">➤</button>
+  </div>
+</div>
+
+<script>
+  const messagesEl = document.getElementById("messages");
+  const typingEl = document.getElementById("typing");
+  const startRow = document.getElementById("start-row");
+  const startBtn = document.getElementById("start-btn");
+  const composer = document.getElementById("composer");
+  const input = document.getElementById("input");
+  const sendBtn = document.getElementById("send-btn");
+
+  // Historique conservé côté client uniquement, le temps de la session.
+  let history = [];
+  let busy = false;
+
+  function addBubble(text, role) {
+    const div = document.createElement("div");
+    div.className = "bubble " + role;
+    div.textContent = text;
+    messagesEl.appendChild(div);
+    messagesEl.scrollTop = messagesEl.scrollHeight;
+    return div;
+  }
+
+  function addError(text) {
+    const div = document.createElement("div");
+    div.className = "error-banner";
+    div.textContent = text;
+    messagesEl.appendChild(div);
+    messagesEl.scrollTop = messagesEl.scrollHeight;
+  }
+
+  async function sendMessage(text) {
+    if (busy || !text.trim()) return;
+    busy = true;
+    sendBtn.disabled = true;
+
+    addBubble(text, "user");
+    typingEl.style.display = "block";
+    messagesEl.scrollTop = messagesEl.scrollHeight;
+
+    try {
+      const res = await fetch("/api/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ history, message: text }),
+      });
+      const data = await res.json();
+
+      if (!res.ok) {
+        addError(data.error || "Une erreur est survenue.");
+      } else {
+        history.push({ role: "user", text });
+        history.push({ role: "model", text: data.reply });
+        addBubble(data.reply, "model");
+      }
+    } catch (err) {
+      addError("Impossible de contacter le serveur. Vérifiez votre connexion et réessayez.");
+    } finally {
+      typingEl.style.display = "none";
+      busy = false;
+      sendBtn.disabled = false;
+    }
+  }
+
+  startBtn.addEventListener("click", () => {
+    startRow.style.display = "none";
+    composer.style.display = "flex";
+    sendMessage("Démarrer la formation");
+  });
+
+  sendBtn.addEventListener("click", () => {
+    const text = input.value;
+    input.value = "";
+    input.style.height = "auto";
+    sendMessage(text);
+  });
+
+  input.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      sendBtn.click();
+    }
+  });
+
+  input.addEventListener("input", () => {
+    input.style.height = "auto";
+    input.style.height = Math.min(input.scrollHeight, 100) + "px";
+  });
+</script>
+</body>
+</html>
+
