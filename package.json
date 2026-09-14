@@ -1,0 +1,16 @@
+{
+  "name": "toyota-ai-sales-coach-webapp",
+  "version": "1.0.0",
+  "description": "Interface web (chat) pour TOYOTA AI Sales Coach - TFR Cursus PRO, appuyée sur l'API Google Gemini.",
+  "main": "server.js",
+  "type": "commonjs",
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2"
+  }
+}
